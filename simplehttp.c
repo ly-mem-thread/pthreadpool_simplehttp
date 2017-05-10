@@ -59,7 +59,7 @@ int parse_uri(char * method,char *uri,char *filename,char * cgiargs);
 void server_static(int fd,char *filename,int filesize);
 void sendheader(int fd,char *filename,char* filesize);
 void server_cgi(int fd,char *filename,char * method,char * cgiargs);
-
+void unimplemented(int client);
 void not_found(int clientfd);
 void bad_request(int clientfd);
 void execute_error(int clientfd);
@@ -131,10 +131,10 @@ exit(-1);
 		 printf("has got a connect\n");
              p=(int *)malloc(sizeof(int));
              *p=connectfd;
-           add_Task_to_queue(thread_pl,accept_quest,(void*)p);
-       //  if(pthread_create(&newthreadID,NULL,accept_quest,connectfd)!=0)
-           //perror("pthread");
-	     //accept_quest(connectfd);
+          add_Task_to_queue(thread_pl,accept_quest,(void*)p);
+      //if(pthread_create(&newthreadID,NULL,accept_quest,(void*)p)!=0)
+          //perror("pthread");
+	   //accept_quest((void *)p);
                  //int n= recv(connectfd,buf,1024,0);
               //if(n<0)perror("recv error:");
                   // buf[n]='\0';
@@ -152,19 +152,26 @@ void accept_quest(void *arg)
 
   {   int *pfd=(int *)arg;
        int fd=*pfd;
-    printf("fd:%d\n",fd);
-       printf("start accept_quest\n");
+        printf("fd:%d\n",fd);
+        printf("start accept_quest\n");
 	char buf[maxb],method[minb],uri[minb],version[minb];//http request line
 	char filename[minb],cgiargs[minb];
 	int is_cgi;
-	get_line(fd,buf,maxb);
-
-        printf("%s\n",buf);
-	sscanf(buf,"%s %s %s ",method,uri,version);//提取方法和资源地址 版本
-	if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
-	{//判断方法
+     //
+int n=0;
+    while(n==0)
+	{n=get_line(fd,buf,maxb);}
+        
+      // read_header(fd);
+	 
+      sscanf(buf,"%s %s %s ",method,uri,version);//提取方法和资源地址 版本
+	 if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
+	{//判断方
+       // read_header(fd);
+        //unimplemented(fd);
 	//目前只写了get post方法有时间在加上
-        close(arg);
+       free(pfd); 
+        close(fd);
 	return ;
 	}
 	
@@ -173,13 +180,15 @@ void accept_quest(void *arg)
 	struct stat sbuf;
 	if(stat(filename,&sbuf)<0)
 	{
-	not_found(fd);
+         //read_header(fd);
+        //not_found(fd);
 	
 	}
 	else
   {
 	if(!is_cgi)
 	{
+              
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限
 		{
 			not_found(fd);	
@@ -196,7 +205,8 @@ void accept_quest(void *arg)
 		server_cgi(fd,filename,method ,cgiargs);
 	}
   }
-close(arg);
+//free(pfd);
+close(fd);
 }
 /* 从套接字读取一行数据 ，以\r\n为标志提取 最后以\n作为 结尾*/
 int get_line(int sock ,char *buf,int size)
@@ -204,11 +214,11 @@ int get_line(int sock ,char *buf,int size)
 
   int i=0;
   char c='\0';
-  int n; 
-while((i<size-1)&&(c!='\n'))
-{
-
-n=recv(sock,&c,1,0);
+int n=0;
+   while((i<size-1)&&(c!='\n'))
+  {
+ //printf(" get line \n");
+    n=recv(sock,&c,1,0);
 	  if(n>0)
          {
 
@@ -219,6 +229,7 @@ n=recv(sock,&c,1,0);
            else c='\n';
            }
 	   buf[i]=c;
+           //printf("%c",c);
 	   i++;
      }else
        {c='\n';}
@@ -283,7 +294,7 @@ strcpy(cgiargs,"");
 
 		
 }
-//http响应 头部信息
+//http响应 头部信息 
 void sendheader(int fd,char *filename,char* filesize)
 {
 char buf[minb];
@@ -302,32 +313,31 @@ void server_static(int fd,char *filename,int filesize )
 {
 	
      char * sfile,filetype[maxb],buf[maxb];
-	FILE* filefd;
+    FILE * filefd;
       signal(SIGPIPE,SIG_IGN);
 	read_header(fd);//跳过头部
 	printf("static \n");
        
-	filefd=fopen(filename,"r");
+      filefd=fopen(filename,"r");
       if(filefd==NULL)
      {
      perror("file error;");
-     not_found(fd);
-       return ;
-     }//printf("static \n");
+      not_found(fd);
+      // return ;
+    exit(0);
+     }
        sendheader(fd,filename,filesize);
-      // sleep(5);
-      
-	fgets(buf,sizeof(buf),filefd);
-         send(fd,buf,strlen(buf),0);
+  	 fgets(buf,sizeof(buf),filefd);
+         //send(fd,buf,strlen(buf),0);
        while(!feof(filefd))
         {
          send(fd,buf,strlen(buf),0);
          fgets(buf,sizeof(buf),filefd);
         }
 
-	
+	printf("filefd>>>%d \n");
 
-	close(filefd);
+	fclose(filefd);
 	
 
 
@@ -397,6 +407,27 @@ char buf[minb];
  send(clientfd, buf, strlen(buf), 0);
 }
 
+void unimplemented(int client)
+{
+ char buf[1024];
+
+ sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "%sServer:server test\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "Content-Type: text/html\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "<HTML><HEAD><TITLE>Method Not Implemented\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "</TITLE></HEAD>\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "<BODY><P>HTTP request method not supported.\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf(buf, "</BODY></HTML>\r\n");
+ send(client, buf, strlen(buf), 0);
+}
 //cgi 处理函数 参照httpd的思路写的
 void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 {
@@ -443,7 +474,7 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 		//post extract the information
 	}
             printf("%s\n",filename);
-	         sprintf(buf,"HTTP/1.0 200 OK\r\n");
+	    sprintf(buf,"HTTP/1.0 200 OK\r\n");
             sprintf(buf,"%sServer:My Web Server\r\n",buf);
             printf("%s.....%d\n",buf,content_length);
             send(fd,buf,strlen(buf),0);
@@ -602,8 +633,9 @@ int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
 	
         if(pl->uMaxoftask<=pl->pTask_size&&pl->uCurr_num<=max_num_of_thread)
           {
+      printf("nedd add \n");
          if( is_need_add_thread( thread_pl)==0) return 0;
-     // printf("nedd add \n");
+     // 
           }
         pthread_mutex_lock(&(pl->pLock));
 	if(pl->pTask_queue==NULL)pl->pTask_queue=pt;
@@ -612,13 +644,14 @@ int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
 		temptask=pl->pTask_queue;
 		while(temptask->next!=NULL)
 			temptask=temptask->next;
-		temptask->next=pt;
+	               temptask->next=pt;
 
 	}
 	pl->pTask_size++;
-	pthread_mutex_unlock(&(pl->pLock));
+      	
+	pthread_mutex_unlock(&(pl->pLock)); //printf("add task \n");
 	pthread_cond_signal(&(pl->tPcond));
-        //printf("signal\n");
+       printf("signal\n");
 	return 1;
 }
 
@@ -766,9 +799,11 @@ void excute_func(void *arg)
 	Pthread_info * pi=NULL;
 	while(1)
 	{ 
+//printf("thread %d\n",pthread_self());
 	pthread_mutex_lock(&(pl->pLock));
 	 while(pl->pTask_size==0 )
-	{
+	{ 
+              
 		pthread_cond_wait(&(pl->tPcond),&(pl->pLock));
         }
 		pt=pl->pTask_queue;
@@ -777,14 +812,16 @@ void excute_func(void *arg)
 		pi=get_thread_by_id(pl,tid);
 		 pi->status=isruning;
                  pl->sum++;
+              printf("queue_ tasksize :%d\n",pl->pTask_size);
                   pl->pTask_size--;
                   //pl->uWork_num++;
-            	printf("sum of current :%d\n",pl->uCurr_num);
-                //printf("queue_ tasksize :%d\n",pl->pTask_size);
+            printf("sum of current :%d\n",pl->uCurr_num);
+                
                 pthread_mutex_unlock(&(pl->pLock));
 
                 (*(pt->f))(pt->arg);
                  pi->status=isnotruning;
+              // free(pt->arg);
                free(pt);
               pt=NULL;
 	}
