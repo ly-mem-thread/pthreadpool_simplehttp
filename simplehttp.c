@@ -16,7 +16,9 @@
 #define isnotruning 0
 #define max_num_of_thread  50
 #define min_of_thread 10
-#define max_num_of_task 1000
+#define max_num_of_task 900
+int sum=0;
+//int processnum=0;
 typedef struct thread_task
 {
 	void * arg;
@@ -44,6 +46,7 @@ typedef struct thread_pool
 	//unsigned int uWaite_num;
 	//unsigned int uWork_num;
 	//pthread_t printf_p;
+unsigned int tasksum;
 	  pthread_t monitor_p;
 
 
@@ -128,13 +131,14 @@ exit(-1);
 	{
 	 if((connectfd=accept(listenfd,&cliaddr,&clilen))!=-1)
 	 {
-		 printf("has got a connect\n");
+		 sum++;//printf("has got a connect\n");
              p=(int *)malloc(sizeof(int));
+              if(p==NULL)break;
              *p=connectfd;
-          add_Task_to_queue(thread_pl,accept_quest,(void*)p);
+         add_Task_to_queue(thread_pl,accept_quest,(void*)p);
       //if(pthread_create(&newthreadID,NULL,accept_quest,(void*)p)!=0)
           //perror("pthread");
-	   //accept_quest((void *)p);
+	  // accept_quest((void *)p);
                  //int n= recv(connectfd,buf,1024,0);
               //if(n<0)perror("recv error:");
                   // buf[n]='\0';
@@ -150,21 +154,22 @@ exit(-1);
 /*请求处理函数，先找出方法和是否是cgi 在获取文件信息，进入相应的处理函数 based on httpd*/
 void accept_quest(void *arg)
 
-  {   int *pfd=(int *)arg;
+  {  
+     int *pfd=(int *)arg;
        int fd=*pfd;
-        printf("fd:%d\n",fd);
-        printf("start accept_quest\n");
+        //printf("fd:%d\n",fd);
+        
 	char buf[maxb],method[minb],uri[minb],version[minb];//http request line
 	char filename[minb],cgiargs[minb];
 	int is_cgi;
      //
-int n=0;
-    while(n==0)
-	{n=get_line(fd,buf,maxb);}
-        
-      // read_header(fd);
-	 
-      sscanf(buf,"%s %s %s ",method,uri,version);//提取方法和资源地址 版本
+
+     //while(n==0)
+
+    get_line(fd,buf,maxb);  
+    
+	printf("%s\n",buf);
+        sscanf(buf,"%s %s %s ",method,uri,version);//提取方法和资源地址 版本
 	 if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
 	{//判断方
        // read_header(fd);
@@ -180,8 +185,8 @@ int n=0;
 	struct stat sbuf;
 	if(stat(filename,&sbuf)<0)
 	{
-         //read_header(fd);
-        //not_found(fd);
+         read_header(fd);
+          not_found(fd);
 	
 	}
 	else
@@ -194,7 +199,7 @@ int n=0;
 			not_found(fd);	
 		}else 
 		server_static(fd,filename,sbuf.st_size);
-	}
+	}/*
 	else 
 	{
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限  
@@ -203,15 +208,18 @@ int n=0;
 		}
 		else 
 		server_cgi(fd,filename,method ,cgiargs);
-	}
+	}*/
   }
-//free(pfd);
-close(fd);
+
+
+printf("signal has done the next%d \n",sum);
+if(close(fd)==-1)perror("close :");
+free(pfd);
+return ;
 }
 /* 从套接字读取一行数据 ，以\r\n为标志提取 最后以\n作为 结尾*/
 int get_line(int sock ,char *buf,int size)
 {
-
   int i=0;
   char c='\0';
 int n=0;
@@ -231,7 +239,7 @@ int n=0;
 	   buf[i]=c;
            //printf("%c",c);
 	   i++;
-     }else
+     }else 
        {c='\n';}
   }
 
@@ -250,7 +258,7 @@ void read_header(int fd)
           //printf("%s \n","header discard");
 	  n=get_line(fd,buf,maxb);
          
-	  printf("%s",buf);
+	  //printf("%s",buf);
 	}
 	return ;
 }
@@ -260,7 +268,7 @@ int parse_uri(char * method,char * uri,char *filename,char *cgiargs)
    
 	int cgi=0;
 	char *ptr;
-printf("start parse_uri\n");
+//printf("start parse_uri\n");
 strcpy(cgiargs,"");
 	if(strcasecmp(method, "GET") == 0)  
        {  
@@ -282,14 +290,14 @@ strcpy(cgiargs,"");
 	}
 	//default dir;
                 sprintf(filename,"./testfile%s",uri);
-            printf("%s\n",uri);
+           // printf("%s\n",uri);
 		if(filename[strlen(filename)-1]=='/')//默认文件地址
 		{
 			strcat(filename,"default.html");
 	        }
 
 		if(cgi==0)strcpy(cgiargs,"");
-             printf("%s %s\n",filename,cgiargs);
+            // printf("%s %s\n",filename,cgiargs);
 		return cgi;
 
 		
@@ -313,33 +321,38 @@ void server_static(int fd,char *filename,int filesize )
 {
 	
      char * sfile,filetype[maxb],buf[maxb];
-    FILE * filefd;
-      signal(SIGPIPE,SIG_IGN);
+   FILE * filefd;
+int n=0;
+  signal(SIGPIPE,SIG_IGN);
 	read_header(fd);//跳过头部
-	printf("static \n");
-       
+        //sendheader(fd,filename,filesize);
+	//printf("static \n");
+      
       filefd=fopen(filename,"r");
       if(filefd==NULL)
      {
      perror("file error;");
       not_found(fd);
-      // return ;
+      //return ;
     exit(0);
      }
+
        sendheader(fd,filename,filesize);
+        //sleep(15);
+//printf("send ok\n");
+
   	 fgets(buf,sizeof(buf),filefd);
          //send(fd,buf,strlen(buf),0);
-       while(!feof(filefd))
+       while(!feof(filefd)&&n>=0)
         {
-         send(fd,buf,strlen(buf),0);
+         n=send(fd,buf,strlen(buf),0);
          fgets(buf,sizeof(buf),filefd);
         }
 
-	printf("filefd>>>%d \n");
-
+	//printf("filefd>>>%d \n");
+       // printf("do ok \n");
 	fclose(filefd);
-	
-
+	//printf("do ok \n");
 
         //printf("%s\n",buf);
 
@@ -572,7 +585,7 @@ Pthread_pool * craet_Pthread(int num)
 	pl->uMax=max_num_of_thread;
         pl->uMaxoftask=max_num_of_task;
 	pl->uCurr_num=num;
-	//pl->uWork_num=0;
+	pl->tasksum=0;
         pl->status=isruning;
        
         
@@ -613,7 +626,7 @@ Pthread_pool * craet_Pthread(int num)
 	}
 
 	
-        //pthread_create(&(pl->monitor_p),NULL,is_need_delete_thread,pl);
+        pthread_create(&(pl->monitor_p),NULL,is_need_delete_thread,pl);
         printf("create thread success\n");
 	return pl;
 }
@@ -623,20 +636,34 @@ int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
 {
 	Pthread_pool * pl=thread_pl;
 	Pthread_task * pt=NULL;
+int * pfd=(int *)arg;
 	pt=(Pthread_task *)malloc(sizeof(Pthread_task ));
-	if(pt==NULL)return -1;
+	if(pt==NULL)
+        { close(*pfd);
+         free(pfd);
+         //free(pt);
+        return -1;
+        }
 	pt->arg=arg;
 	pt->f=f;
         pt->next=NULL;
 	Pthread_task* temptask; 
         
-	
-        if(pl->uMaxoftask<=pl->pTask_size&&pl->uCurr_num<=max_num_of_thread)
+     // printf(" arg >>>%d\n",*(int *)(pt->arg));
+        if(pl->uMaxoftask<pl->pTask_size)
           {
       printf("nedd add \n");
-         if( is_need_add_thread( thread_pl)==0) return 0;
-     // 
+        if( is_need_add_thread( thread_pl)==0)
+       {  
+      printf(" arg >>>%d\n",*pfd);
+      close(*pfd);
+         free(pfd);
+         free(pt);
+        
+         return 0;
+         }
           }
+
         pthread_mutex_lock(&(pl->pLock));
 	if(pl->pTask_queue==NULL)pl->pTask_queue=pt;
 	else 
@@ -648,10 +675,10 @@ int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
 
 	}
 	pl->pTask_size++;
-      	
+      	pl->tasksum++;
 	pthread_mutex_unlock(&(pl->pLock)); //printf("add task \n");
 	pthread_cond_signal(&(pl->tPcond));
-       printf("signal\n");
+      // printf("signal\n");
 	return 1;
 }
 
@@ -664,7 +691,7 @@ void is_need_delete_thread(Pthread_pool *thread_pl)
 	while(1)
 	{sleep(6);
         curr_num_of_doing= monitor_pthread(thread_pl); 
-        printf("current num of thread :%d\n",pl->uCurr_num);
+        printf("current num of thread :%d num of doing :%d\n",pl->uCurr_num,curr_num_of_doing);
 		if(curr_num_of_doing==0)
 		{
 			sleep(5);
@@ -736,12 +763,12 @@ int is_need_add_thread(Pthread_pool * thread_pl)
 			if(temp!=NULL)
 			{
 				pi->next=temp;
-				pi=pi->next;
+				pi=temp;
 				pl->uCurr_num++;
 				
 			}
 			pthread_create(&(temp->tid),NULL,excute_func,pl);
-			//temp->status=isruning;
+			temp->status=isnotruning;
 			//continue;
 		}
 
@@ -799,7 +826,7 @@ void excute_func(void *arg)
 	Pthread_info * pi=NULL;
 	while(1)
 	{ 
-//printf("thread %d\n",pthread_self());
+
 	pthread_mutex_lock(&(pl->pLock));
 	 while(pl->pTask_size==0 )
 	{ 
@@ -807,21 +834,25 @@ void excute_func(void *arg)
 		pthread_cond_wait(&(pl->tPcond),&(pl->pLock));
         }
 		pt=pl->pTask_queue;
+       if(pt==NULL) { pthread_mutex_unlock(&(pl->pLock));continue;}
 		pl->pTask_queue=pt->next;
-		 pthread_t tid = pthread_self();
-		pi=get_thread_by_id(pl,tid);
-		 pi->status=isruning;
+		 
                  pl->sum++;
-              printf("queue_ tasksize :%d\n",pl->pTask_size);
-                  pl->pTask_size--;
+            printf("tasksum :%d\n",pl->tasksum) ;
+                  pl->pTask_size--; 
                   //pl->uWork_num++;
-            printf("sum of current :%d\n",pl->uCurr_num);
+           printf("sum of current :%d\n",pl->sum);
                 
                 pthread_mutex_unlock(&(pl->pLock));
-
+                pthread_t tid = pthread_self();
+		pi=get_thread_by_id(pl,tid);
+		 pi->status=isruning;
                 (*(pt->f))(pt->arg);
-                 pi->status=isnotruning;
-              // free(pt->arg);
+             // if( close(*(int *)pt->arg)==-1)perror("close :");
+                pi->status=isnotruning;
+                printf("change status \n");
+             // free((int*)pt->arg);
+              // pt->arg=NULL;
                free(pt);
               pt=NULL;
 	}
@@ -836,8 +867,8 @@ int num_of_running_thread=0;
  Pthread_info * pi=pl->pThread_queue;
   while(pi!=NULL)
 {
-if(pi->status==isruning)
-num_of_running_thread++;
+if(pi->status==isruning)  {//printf("runing thread %d\n",pi->tid);
+num_of_running_thread++;}
 pi=pi->next;
 }
 return num_of_running_thread;
