@@ -10,6 +10,7 @@
 #include<pthread.h>
 #include<sys/wait.h>
 #include<signal.h>
+#include<sys/errno.h>
 #define maxb 1024
 #define minb 100
 #define isruning 1
@@ -53,7 +54,7 @@ unsigned int tasksum;
 }Pthread_pool;
  void excute_func(void *arg);
 void is_need_delete_thread(Pthread_pool *thread_pl);
- // int Init(int &port,int &backlog);
+ //int Init(int &port,int &backlog);
 //int start(int port);
 void accept_quest(void *);
 void read_header(int fd);
@@ -120,10 +121,19 @@ exit(-1);
  exit(-1);
 }
 
- 
+
+/*sigset_t signal_mask;
+   sigemptyset (&signal_mask);
+   sigaddset (&signal_mask, SIGPIPE);
+   int rc = pthread_sigmask (SIG_BLOCK, &signal_mask, NULL);
+   if (rc != 0)
+   {
+      printf("block sigpipe error\n");
+   } */
     Pthread_pool *thread_pl=NULL;
 
-    thread_pl=craet_Pthread(10); 
+    thread_pl=craet_Pthread(20); //
+printf("process id :%d\n",getpid());
  
     int *p=NULL;
 	socklen_t clilen=sizeof(cliaddr);
@@ -138,7 +148,7 @@ exit(-1);
          add_Task_to_queue(thread_pl,accept_quest,(void*)p);
       //if(pthread_create(&newthreadID,NULL,accept_quest,(void*)p)!=0)
           //perror("pthread");
-	  // accept_quest((void *)p);
+	   //accept_quest((void *)p);
                  //int n= recv(connectfd,buf,1024,0);
               //if(n<0)perror("recv error:");
                   // buf[n]='\0';
@@ -154,10 +164,16 @@ exit(-1);
 /*请求处理函数，先找出方法和是否是cgi 在获取文件信息，进入相应的处理函数 based on httpd*/
 void accept_quest(void *arg)
 
-  {  
-     int *pfd=(int *)arg;
+  { signal(SIGPIPE,SIG_IGN);
+struct timeval timeout = {1,500}; 
+   //int nNetTimeout=100;
+//设置发送超时 
+    int *pfd=(int *)arg;
        int fd=*pfd;
-        //printf("fd:%d\n",fd);
+    setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
+
+    
+       // printf("pid >>>:%d\n",pthread_self());
         
 	char buf[maxb],method[minb],uri[minb],version[minb];//http request line
 	char filename[minb],cgiargs[minb];
@@ -166,26 +182,26 @@ void accept_quest(void *arg)
 
      //while(n==0)
 
-    get_line(fd,buf,maxb);  
-    
-	printf("%s\n",buf);
-        sscanf(buf,"%s %s %s ",method,uri,version);//提取方法和资源地址 版本
-	 if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
+     get_line(fd,buf,maxb);  
+     //read_header(fd);
+	//printf("discard buf%s\n",buf);
+      sscanf(buf,"%s %s %s",method,uri,version);//提取方法和资源地址 版本
+	  if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
 	{//判断方
        // read_header(fd);
         //unimplemented(fd);
 	//目前只写了get post方法有时间在加上
-       free(pfd); 
+        free(pfd); 
         close(fd);
 	return ;
 	}
 	
 	is_cgi=parse_uri(method,uri,filename,cgiargs);
-        printf("is cgi ?%d\n",is_cgi);
-	struct stat sbuf;
+        //printf("is cgi ?%d\n",is_cgi);
+	 struct stat sbuf;
 	if(stat(filename,&sbuf)<0)
 	{
-         read_header(fd);
+          read_header(fd);
           not_found(fd);
 	
 	}
@@ -197,10 +213,11 @@ void accept_quest(void *arg)
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限
 		{
 			not_found(fd);	
-		}else 
+		}   
+           else
 		server_static(fd,filename,sbuf.st_size);
-	}/*
-	else 
+	}
+	 /*else 
 	{
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限  
 		{
@@ -211,9 +228,8 @@ void accept_quest(void *arg)
 	}*/
   }
 
-
-printf("signal has done the next%d \n",sum);
-if(close(fd)==-1)perror("close :");
+//printf("pid2>>>>%d \n",pthread_self());
+close(fd);
 free(pfd);
 return ;
 }
@@ -223,9 +239,10 @@ int get_line(int sock ,char *buf,int size)
   int i=0;
   char c='\0';
 int n=0;
+ signal(SIGPIPE,SIG_IGN);
    while((i<size-1)&&(c!='\n'))
   {
- //printf(" get line \n");
+// printf(" get line \n");
     n=recv(sock,&c,1,0);
 	  if(n>0)
          {
@@ -239,26 +256,30 @@ int n=0;
 	   buf[i]=c;
            //printf("%c",c);
 	   i++;
-     }else 
-       {c='\n';}
+     }else {if((n<0) &&(errno == EINTR)){ continue;} break;}
+     
+      
+      
   }
-
+ // if(i==0)bzero(buf,sizeof(buf));
    buf[i]='\0';
    return i;
 }
 //跳过头部数据
 void read_header(int fd)
 {
-       
+       //signal(SIGPIPE,SIG_IGN);
 	char buf[maxb];
 	int n=1;
+       
  	n=get_line(fd,buf,maxb);
-	while(strcmp(buf,"\n")&&n>0)
+        //n=get_line(fd,buf,maxb);
+	while(strcmp("\n",buf)!=0&&(n>0))
 	{ 
-          //printf("%s \n","header discard");
-	  n=get_line(fd,buf,maxb);
          
-	  //printf("%s",buf);
+	 n=get_line(fd,buf,maxb);
+          //if(n==1){printf("n>>>>>>%d\n",n);break;}
+	
 	}
 	return ;
 }
@@ -305,6 +326,7 @@ strcpy(cgiargs,"");
 //http响应 头部信息 
 void sendheader(int fd,char *filename,char* filesize)
 {
+//signal(SIGPIPE,SIG_IGN);
 char buf[minb];
 char filetype[minb];
 get_filetype(filename,filetype);
@@ -315,16 +337,19 @@ get_filetype(filename,filetype);
 	sprintf(buf,"%s\r\n",buf);
 
 	send(fd,buf,strlen(buf),0);
+return ;
 }
 //处理静态文件
 void server_static(int fd,char *filename,int filesize )
 {
 	
-     char * sfile,filetype[maxb],buf[maxb];
+   char * sfile,filetype[minb],buf[maxb];
    FILE * filefd;
-int n=0;
-  signal(SIGPIPE,SIG_IGN);
-	read_header(fd);//跳过头部
+   int n=1;
+
+  
+read_header(fd);//跳过头部
+
         //sendheader(fd,filename,filesize);
 	//printf("static \n");
       
@@ -332,18 +357,18 @@ int n=0;
       if(filefd==NULL)
      {
      perror("file error;");
-      not_found(fd);
-      //return ;
-    exit(0);
+     not_found(fd);
+      return ;
+   // exit(0);
      }
+ //sleep(10);
+//printf("send \n");
+      sendheader(fd,filename,filesize);
 
-       sendheader(fd,filename,filesize);
-        //sleep(15);
-//printf("send ok\n");
 
   	 fgets(buf,sizeof(buf),filefd);
-         //send(fd,buf,strlen(buf),0);
-       while(!feof(filefd)&&n>=0)
+         send(fd,buf,strlen(buf),0);
+       while((!feof(filefd))&&n>=0)
         {
          n=send(fd,buf,strlen(buf),0);
          fgets(buf,sizeof(buf),filefd);
@@ -372,7 +397,7 @@ void get_filetype(char * filename,char *filetype)
 void not_found(int clientfd)
 {
  char buf[1024];
-
+//signal(SIGPIPE,SIG_IGN);
  sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\n");
  send(clientfd, buf, strlen(buf), 0);
  sprintf(buf,"%sServer:server test\r\n",buf);
@@ -394,7 +419,7 @@ void not_found(int clientfd)
  void bad_request(int clientfd)
 {
 char buf[1024];
-
+//signal(SIGPIPE,SIG_IGN);
  sprintf(buf, "HTTP/1.0 400 BAD REQUEST\r\n");
  send(clientfd, buf, sizeof(buf), 0);
  sprintf(buf, "Content-type: text/html\r\n");
@@ -410,6 +435,7 @@ char buf[1024];
 void execute_error(int clientfd)
 {
 char buf[minb];
+//signal(SIGPIPE,SIG_IGN);
  sprintf(buf, "HTTP/1.0 500 Internal Server Error\r\n");
  send(clientfd, buf, strlen(buf), 0);
  sprintf(buf, "Content-type: text/html\r\n");
@@ -423,7 +449,7 @@ char buf[minb];
 void unimplemented(int client)
 {
  char buf[1024];
-
+//signal(SIGPIPE,SIG_IGN);
  sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
  send(client, buf, strlen(buf), 0);
  sprintf(buf, "%sServer:server test\r\n");
@@ -466,7 +492,7 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
                
 		nchars=get_line(fd,buf,minb);
                //printf("%s\n",buf);
-		while((nchars>0)&&strcmp(buf,"\n"))
+		while((nchars>0)&&(strcmp("\n",buf)!=0))
 		{ 
                      //printf("%s\n",buf);
                      buf[15]='\0';//end id
@@ -621,7 +647,7 @@ Pthread_pool * craet_Pthread(int num)
 			free(pl);
 			return NULL;
 		}
-		pthread_create(&(p->tid),NULL,excute_func,pl);
+		pthread_create(&(temp->tid),NULL,excute_func,pl);
 		p->status=isnotruning;//
 	}
 
@@ -650,7 +676,7 @@ int * pfd=(int *)arg;
 	Pthread_task* temptask; 
         
      // printf(" arg >>>%d\n",*(int *)(pt->arg));
-        if(pl->uMaxoftask<pl->pTask_size)
+       /* if(pl->uMaxoftask<pl->pTask_size)
           {
       printf("nedd add \n");
         if( is_need_add_thread( thread_pl)==0)
@@ -662,10 +688,11 @@ int * pfd=(int *)arg;
         
          return 0;
          }
-          }
+          }*/
 
         pthread_mutex_lock(&(pl->pLock));
-	if(pl->pTask_queue==NULL)pl->pTask_queue=pt;
+	if(pl->pTask_queue==NULL)
+           pl->pTask_queue=pt;
 	else 
 	{
 		temptask=pl->pTask_queue;
@@ -830,28 +857,30 @@ void excute_func(void *arg)
 	pthread_mutex_lock(&(pl->pLock));
 	 while(pl->pTask_size==0 )
 	{ 
-              
+               //printf("wait for signal \n");
 		pthread_cond_wait(&(pl->tPcond),&(pl->pLock));
         }
-		pt=pl->pTask_queue;
-       if(pt==NULL) { pthread_mutex_unlock(&(pl->pLock));continue;}
+	 
+ 	pt=pl->pTask_queue;
+       if(pt==NULL) //{ pthread_mutex_unlock(&(pl->pLock));continue;}
+     {printf("get the task error\n"); exit(0);}
 		pl->pTask_queue=pt->next;
-		 
+		 pl->pTask_size--; 
                  pl->sum++;
-            printf("tasksum :%d\n",pl->tasksum) ;
-                  pl->pTask_size--; 
+            //printf("tasksum :%d\n",pl->tasksum) ;
+                 
                   //pl->uWork_num++;
-           printf("sum of current :%d\n",pl->sum);
-                
+           //printf("sum of current :%d\n",pl->sum);
+             //printf("task size %d\n",pl->pTask_size);   
                 pthread_mutex_unlock(&(pl->pLock));
                 pthread_t tid = pthread_self();
 		pi=get_thread_by_id(pl,tid);
 		 pi->status=isruning;
-                (*(pt->f))(pt->arg);
-             // if( close(*(int *)pt->arg)==-1)perror("close :");
+              (*(pt->f))(pt->arg);
+              //if( close(*(int *)pt->arg)==-1)perror("close :");
                 pi->status=isnotruning;
-                printf("change status \n");
-             // free((int*)pt->arg);
+                
+            // free((int*)pt->arg);
               // pt->arg=NULL;
                free(pt);
               pt=NULL;
@@ -867,8 +896,10 @@ int num_of_running_thread=0;
  Pthread_info * pi=pl->pThread_queue;
   while(pi!=NULL)
 {
-if(pi->status==isruning)  {//printf("runing thread %d\n",pi->tid);
+if(pi->status==isruning)  
+{
 num_of_running_thread++;}
+
 pi=pi->next;
 }
 return num_of_running_thread;
