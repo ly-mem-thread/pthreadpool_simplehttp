@@ -52,31 +52,31 @@ unsigned int tasksum;
 
 
 }Pthread_pool;
- void excute_func(void *arg);
-void is_need_delete_thread(Pthread_pool *thread_pl);
+ void Tpool_excute_func(void *arg);
+void Tpool_monitor_delete_thread(Pthread_pool *thread_pl);
  //int Init(int &port,int &backlog);
 //int start(int port);
-void accept_quest(void *);
-void read_header(int fd);
-int get_line(int sock,char *buf,int size);
-int parse_uri(char * method,char *uri,char *filename,char * cgiargs);
-void server_static(int fd,char *filename,int filesize);
-void sendheader(int fd,char *filename,char* filesize);
-void server_cgi(int fd,char *filename,char * method,char * cgiargs);
-void unimplemented(int client);
-void not_found(int clientfd);
-void bad_request(int clientfd);
-void execute_error(int clientfd);
+void Simhttp_accept_quest(void *);
+void Simhttp_discard_header(int fd);
+int Simhttp_get_line(int sock,char *buf,int size);
+int Simhttp_parse_uri(char * method,char *uri,char *filename,char * cgiargs);
+void Simhttp_server_static(int fd,char *filename,int filesize);
+void Simhttp_send_header(int fd,char *filename,char* filesize);
+void Simhttp_server_cgi(int fd,char *filename,char * method,char * cgiargs);
+void Simhttp_method_unimplemented(int client);
+void Simhttp_flle_not_found(int clientfd);
+void Simhttp_bad_request(int clientfd);
+void Simhttp_execute_error(int clientfd);
 
-void getfiletype(char * filename,char *filetype);
+void Simhttp_get_filetype(char * filename,char *filetype);
 
-Pthread_pool * craet_Pthread(int num);
-int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg);
-void is_need_delete_thread(Pthread_pool *thread_pl);
-int is_need_add_thread(Pthread_pool * thread_pl);
- Pthread_info  *get_thread_by_id(Pthread_pool *thread_pl,pthread_t id);
-void excute_func(void *arg);
-int  monitor_pthread(Pthread_pool * thread_pl);
+Pthread_pool * Tpool_craet_Pthread(int num);
+int  Tpool_add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg);
+void Tpool_monitor_delete_thread(Pthread_pool *thread_pl);
+int Tpool_is_need_add_thread(Pthread_pool * thread_pl);
+ Pthread_info  *Tpool_get_thread_by_id(Pthread_pool *thread_pl,pthread_t id);
+void Tpool_excute_func(void *arg);
+int  Tpool_monitor_pthread(Pthread_pool * thread_pl);
 
 int main(int argc ,char *argv[])
 {
@@ -132,7 +132,7 @@ exit(-1);
    } */
     Pthread_pool *thread_pl=NULL;
 
-    thread_pl=craet_Pthread(20); //
+    thread_pl=Tpool_craet_Pthread(20); //
 printf("process id :%d\n",getpid());
  
     int *p=NULL;
@@ -145,10 +145,10 @@ printf("process id :%d\n",getpid());
              p=(int *)malloc(sizeof(int));
               if(p==NULL)break;
              *p=connectfd;
-         add_Task_to_queue(thread_pl,accept_quest,(void*)p);
-      //if(pthread_create(&newthreadID,NULL,accept_quest,(void*)p)!=0)
+         Tpool_add_Task_to_queue(thread_pl,Simhttp_accept_quest,(void*)p);
+      //if(pthread_create(&newthreadID,NULL,Simhttp_accept_quest,(void*)p)!=0)
           //perror("pthread");
-	   //accept_quest((void *)p);
+	   //Simhttp_accept_quest((void *)p);
                  //int n= recv(connectfd,buf,1024,0);
               //if(n<0)perror("recv error:");
                   // buf[n]='\0';
@@ -162,9 +162,10 @@ printf("process id :%d\n",getpid());
 
 }
 /*请求处理函数，先找出方法和是否是cgi 在获取文件信息，进入相应的处理函数 based on httpd*/
-void accept_quest(void *arg)
+void Simhttp_accept_quest(void *arg)
 
-  { signal(SIGPIPE,SIG_IGN);
+  { 
+signal(SIGPIPE,SIG_IGN);
 struct timeval timeout = {1,500}; 
    //int nNetTimeout=100;
 //设置发送超时 
@@ -182,27 +183,28 @@ struct timeval timeout = {1,500};
 
      //while(n==0)
 
-     get_line(fd,buf,maxb);  
-     //read_header(fd);
+     Simhttp_get_line(fd,buf,maxb);  
+     //Simhttp_discard_header(fd);
 	//printf("discard buf%s\n",buf);
       sscanf(buf,"%s %s %s",method,uri,version);//提取方法和资源地址 版本
 	  if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
 	{//判断方
-       // read_header(fd);
-        //unimplemented(fd);
-	//目前只写了get post方法有时间在加上
-        free(pfd); 
+printf("method error\n");
+        Simhttp_discard_header(fd);
+         Simhttp_method_unimplemented(fd);
+	//目前只写了get post方法有时间在加上 
         close(fd);
+       free(pfd);
 	return ;
 	}
 	
-	is_cgi=parse_uri(method,uri,filename,cgiargs);
+	is_cgi=Simhttp_parse_uri(method,uri,filename,cgiargs);
         //printf("is cgi ?%d\n",is_cgi);
 	 struct stat sbuf;
 	if(stat(filename,&sbuf)<0)
 	{
-          read_header(fd);
-          not_found(fd);
+          Simhttp_discard_header(fd);
+          Simhttp_flle_not_found(fd);
 	
 	}
 	else
@@ -212,20 +214,20 @@ struct timeval timeout = {1,500};
               
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限
 		{
-			not_found(fd);	
+			Simhttp_flle_not_found(fd);	
 		}   
            else
-		server_static(fd,filename,sbuf.st_size);
+		Simhttp_server_static(fd,filename,sbuf.st_size);
 	}
-	 /*else 
+	 else 
 	{
 		if(!(S_ISREG(sbuf.st_mode)||!(S_IRUSR&sbuf.st_mode)))//文件没有读取权限  
 		{
-			execute_error(fd);		
+			Simhttp_execute_error(fd);		
 		}
 		else 
-		server_cgi(fd,filename,method ,cgiargs);
-	}*/
+		Simhttp_server_cgi(fd,filename,method ,cgiargs);
+	}
   }
 
 //printf("pid2>>>>%d \n",pthread_self());
@@ -234,12 +236,12 @@ free(pfd);
 return ;
 }
 /* 从套接字读取一行数据 ，以\r\n为标志提取 最后以\n作为 结尾*/
-int get_line(int sock ,char *buf,int size)
+int Simhttp_get_line(int sock ,char *buf,int size)
 {
   int i=0;
   char c='\0';
 int n=0;
- signal(SIGPIPE,SIG_IGN);
+// signal(SIGPIPE,SIG_IGN);
    while((i<size-1)&&(c!='\n'))
   {
 // printf(" get line \n");
@@ -266,30 +268,30 @@ int n=0;
    return i;
 }
 //跳过头部数据
-void read_header(int fd)
+void Simhttp_discard_header(int fd)
 {
        //signal(SIGPIPE,SIG_IGN);
 	char buf[maxb];
 	int n=1;
        
- 	n=get_line(fd,buf,maxb);
-        //n=get_line(fd,buf,maxb);
+ 	n=Simhttp_get_line(fd,buf,maxb);
+        //n=Simhttp_get_line(fd,buf,maxb);
 	while(strcmp("\n",buf)!=0&&(n>0))
 	{ 
          
-	 n=get_line(fd,buf,maxb);
+	 n=Simhttp_get_line(fd,buf,maxb);
           //if(n==1){printf("n>>>>>>%d\n",n);break;}
 	
 	}
 	return ;
 }
 //提取filename和参数（如果有的话）
-int parse_uri(char * method,char * uri,char *filename,char *cgiargs)
+int Simhttp_parse_uri(char * method,char * uri,char *filename,char *cgiargs)
 {
    
 	int cgi=0;
 	char *ptr;
-//printf("start parse_uri\n");
+//printf("start Simhttp_parse_uri\n");
 strcpy(cgiargs,"");
 	if(strcasecmp(method, "GET") == 0)  
        {  
@@ -324,7 +326,7 @@ strcpy(cgiargs,"");
 		
 }
 //http响应 头部信息 
-void sendheader(int fd,char *filename,char* filesize)
+void Simhttp_send_header(int fd,char *filename,char* filesize)
 {
 //signal(SIGPIPE,SIG_IGN);
 char buf[minb];
@@ -340,7 +342,7 @@ get_filetype(filename,filetype);
 return ;
 }
 //处理静态文件
-void server_static(int fd,char *filename,int filesize )
+void Simhttp_server_static(int fd,char *filename,int filesize )
 {
 	
    char * sfile,filetype[minb],buf[maxb];
@@ -348,22 +350,22 @@ void server_static(int fd,char *filename,int filesize )
    int n=1;
 
   
-read_header(fd);//跳过头部
+Simhttp_discard_header(fd);//跳过头部
 
-        //sendheader(fd,filename,filesize);
+        //Simhttp_send_header(fd,filename,filesize);
 	//printf("static \n");
       
       filefd=fopen(filename,"r");
       if(filefd==NULL)
      {
      perror("file error;");
-     not_found(fd);
+     Simhttp_flle_not_found(fd);
       return ;
    // exit(0);
      }
  //sleep(10);
 //printf("send \n");
-      sendheader(fd,filename,filesize);
+      Simhttp_send_header(fd,filename,filesize);
 
 
   	 fgets(buf,sizeof(buf),filefd);
@@ -394,7 +396,7 @@ void get_filetype(char * filename,char *filetype)
 	else strcpy(filetype,".text/plain");
 }
 /*based on tinyhttpd */
-void not_found(int clientfd)
+void Simhttp_flle_not_found(int clientfd)
 {
  char buf[1024];
 //signal(SIGPIPE,SIG_IGN);
@@ -416,7 +418,7 @@ void not_found(int clientfd)
 
 
 /*based on tinyhttpd*/
- void bad_request(int clientfd)
+ void Simhttp_bad_request(int clientfd)
 {
 char buf[1024];
 //signal(SIGPIPE,SIG_IGN);
@@ -432,7 +434,7 @@ char buf[1024];
  send(clientfd, buf, sizeof(buf), 0);
 }
 
-void execute_error(int clientfd)
+void Simhttp_execute_error(int clientfd)
 {
 char buf[minb];
 //signal(SIGPIPE,SIG_IGN);
@@ -446,31 +448,30 @@ char buf[minb];
  send(clientfd, buf, strlen(buf), 0);
 }
 
-void unimplemented(int client)
+void Simhttp_method_unimplemented(int client)
 {
- char buf[1024];
-//signal(SIGPIPE,SIG_IGN);
- sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "%sServer:server test\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "Content-Type: text/html\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "<HTML><HEAD><TITLE>Method Not Implemented\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "</TITLE></HEAD>\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "<BODY><P>HTTP request method not supported.\r\n");
- send(client, buf, strlen(buf), 0);
- sprintf(buf, "</BODY></HTML>\r\n");
- send(client, buf, strlen(buf), 0);
+ 
+    char buf[1024];
+
+    sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
+    sprintf(buf, "%sServer:server test\r\n",buf);
+    sprintf(buf, "%Content-Type: text/html\r\n",buf);
+
+    sprintf(buf, "%s\r\n",buf);
+
+    sprintf(buf, "%s<HTML><HEAD><TITLE>Method Not Implemented\r\n",buf);
+
+    sprintf(buf, "%s</TITLE></HEAD>\r\n",buf);
+
+    sprintf(buf, "%s<BODY><P>HTTP request method not supported.\r\n",buf);
+
+    sprintf(buf, "%s</BODY></HTML>\r\n",buf);
+    send(client, buf, strlen(buf), 0);
 }
 //cgi 处理函数 参照httpd的思路写的
-void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
+void Simhttp_server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 {
-   printf("start server_cgi\n");
+   printf("start Simhttp_server_cgi\n");
 	char buf[minb];
 	int input[2];
 	int output[2];
@@ -484,15 +485,15 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 	if (strcasecmp(method,"GET") == 0)
 	{
           
-		read_header(fd);//跳过头部
+		Simhttp_discard_header(fd);//跳过头部
               
 		
 	}else if(strcasecmp(method,"POST")==0)
 	{
                
-		nchars=get_line(fd,buf,minb);
+		nchars=Simhttp_get_line(fd,buf,minb);
                //printf("%s\n",buf);
-		while((nchars>0)&&(strcmp("\n",buf)!=0))
+		while((nchars>0)&&strcmp("\n",buf))
 		{ 
                      //printf("%s\n",buf);
                      buf[15]='\0';//end id
@@ -502,12 +503,12 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
                     content_length=atoi(&buf[16]);
                     
                     }
-		    nchars=get_line(fd,buf,minb);
+		    nchars=Simhttp_get_line(fd,buf,minb);
                        
 		}
 		if(content_length==-1)
 		{
-                  bad_request(fd);
+                  Simhttp_bad_request(fd);
 				return ;
 		}
 		//post extract the information
@@ -520,7 +521,7 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 		 if(pipe(input)<0)
 		 {
                  perror("pipe error:");
-               execute_error(fd);
+               Simhttp_execute_error(fd);
 			 //cgi error;
 			return ;
 		 }
@@ -528,12 +529,12 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 		 {
 			
                       perror("pipe error:"); //cgi error;
-                  execute_error(fd);
+                  Simhttp_execute_error(fd);
 			return ;
 		 }
                   if((pid=fork())<0)
                 {     
-                   execute_error(fd);
+                   Simhttp_execute_error(fd);
                    return ;
                 } 
  		  if(pid==0)
@@ -567,7 +568,7 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 
 
 		  }else 
-		  {    signal(SIGPIPE,SIG_IGN);
+		  {    //signal(SIGPIPE,SIG_IGN);
 			  close(input[0]); 
 			  close(output[1]);
 	           if(strcasecmp(method,"POST")==0)
@@ -591,7 +592,7 @@ void server_cgi(int fd,char *filename,char * method ,char * cgiargs)
 
 /*******************下面 部分是动态线程池部分 ，参考了其他 作者的写法 自己也根据自己的理解修改了，只为学习使用 ******************/
 /* 创建线程池 */
-Pthread_pool * craet_Pthread(int num)
+Pthread_pool * Tpool_craet_Pthread(int num)
 {
         printf("create start\n");
 	if(num<1)return NULL;
@@ -622,7 +623,7 @@ Pthread_pool * craet_Pthread(int num)
 	 temp->next=NULL;
 	 pl->pThread_queue=temp;
 	 p=temp;
-        pthread_create(&(temp->tid),NULL,excute_func,pl);
+        pthread_create(&(temp->tid),NULL,Tpool_excute_func,pl);
         p->status=isnotruning;
 	}else {
         free(pl);
@@ -647,18 +648,18 @@ Pthread_pool * craet_Pthread(int num)
 			free(pl);
 			return NULL;
 		}
-		pthread_create(&(temp->tid),NULL,excute_func,pl);
+		pthread_create(&(temp->tid),NULL,Tpool_excute_func,pl);
 		p->status=isnotruning;//
 	}
 
 	
-        pthread_create(&(pl->monitor_p),NULL,is_need_delete_thread,pl);
+        pthread_create(&(pl->monitor_p),NULL,Tpool_monitor_delete_thread,pl);
         printf("create thread success\n");
 	return pl;
 }
 
 /*添加任务到任务队列，兵唤醒等待的线程，如果队列满了则增加线程，线程池达到最大数不在增加线程，任务队列已满则丢弃任务*/
-int  add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
+int  Tpool_add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg)
 {
 	Pthread_pool * pl=thread_pl;
 	Pthread_task * pt=NULL;
@@ -679,7 +680,7 @@ int * pfd=(int *)arg;
        /* if(pl->uMaxoftask<pl->pTask_size)
           {
       printf("nedd add \n");
-        if( is_need_add_thread( thread_pl)==0)
+        if( Tpool_is_need_add_thread( thread_pl)==0)
        {  
       printf(" arg >>>%d\n",*pfd);
       close(*pfd);
@@ -709,7 +710,7 @@ int * pfd=(int *)arg;
 	return 1;
 }
 
-void is_need_delete_thread(Pthread_pool *thread_pl)
+void Tpool_monitor_delete_thread(Pthread_pool *thread_pl)
 {
 	Pthread_pool * pl=thread_pl;
 	if(pl==NULL)return ;
@@ -717,14 +718,14 @@ void is_need_delete_thread(Pthread_pool *thread_pl)
     unsigned int lastNum;
 	while(1)
 	{sleep(6);
-        curr_num_of_doing= monitor_pthread(thread_pl); 
+        curr_num_of_doing= Tpool_monitor_pthread(thread_pl); 
         printf("current num of thread :%d num of doing :%d\n",pl->uCurr_num,curr_num_of_doing);
 		if(curr_num_of_doing==0)
 		{
 			sleep(5);
-		   if( monitor_pthread(thread_pl)==0&&pl->uCurr_num>min_of_thread)
+		   if( Tpool_monitor_pthread(thread_pl)==0&&pl->uCurr_num>min_of_thread)
 		   {
-			   lastNum=pl->uCurr_num/2;
+			   lastNum=pl->uCurr_num-min_of_thread;
 			   pthread_mutex_lock(&pl->pLock);
 			   Pthread_info * pi=pl->pThread_queue;
 			    Pthread_info * pin;
@@ -737,8 +738,9 @@ void is_need_delete_thread(Pthread_pool *thread_pl)
 
 						
 						lastNum--;
-						pi=pi->next;
-						kill(pin->tid,SIGKILL);
+						//pi->next=pin->next;
+                                  //pthread_cancel(pin->tid);
+						 //kill(pin->tid,SIGKILL);
 						free(pin);
 						
 					}else 
@@ -747,16 +749,17 @@ void is_need_delete_thread(Pthread_pool *thread_pl)
 					}
 					
 				}
+                        pthread_mutex_unlock(&pl->pLock);
+			    //ÈÎÎñœÏ      
 		   }
-		   pthread_mutex_unlock(&pl->pLock);
-			    //ÈÎÎñœÏ
+		   
 		}
 
 	}
 
 }
 
-int is_need_add_thread(Pthread_pool * thread_pl)
+int Tpool_is_need_add_thread(Pthread_pool * thread_pl)
 {
 	Pthread_pool * pl=thread_pl;
 	Pthread_info * pi;
@@ -794,7 +797,7 @@ int is_need_add_thread(Pthread_pool * thread_pl)
 				pl->uCurr_num++;
 				
 			}
-			pthread_create(&(temp->tid),NULL,excute_func,pl);
+			pthread_create(&(temp->tid),NULL,Tpool_excute_func,pl);
 			temp->status=isnotruning;
 			//continue;
 		}
@@ -835,7 +838,7 @@ void destroy_Pthread(Pthread_pool * thread_pl)
 	return ;
 }*/
 
- Pthread_info  *get_thread_by_id(Pthread_pool *thread_pl,pthread_t id){
+ Pthread_info  *Tpool_get_thread_by_id(Pthread_pool *thread_pl,pthread_t id){
 	//thread_info *pt=NULL;
 	Pthread_info *p=thread_pl->pThread_queue;
 	while(p!=NULL){
@@ -846,7 +849,7 @@ void destroy_Pthread(Pthread_pool * thread_pl)
 	return NULL;
    }
 
-void excute_func(void *arg)
+void Tpool_excute_func(void *arg)
 {
 	Pthread_pool * pl=(Pthread_pool *)(arg);
 	Pthread_task * pt=NULL;
@@ -857,25 +860,30 @@ void excute_func(void *arg)
 	pthread_mutex_lock(&(pl->pLock));
 	 while(pl->pTask_size==0 )
 	{ 
+         
                //printf("wait for signal \n");
 		pthread_cond_wait(&(pl->tPcond),&(pl->pLock));
         }
-	 
+	 pthread_t tid = pthread_self();
+	 pi=Tpool_get_thread_by_id(pl,tid);
+         if(pi==NULL) { pthread_mutex_unlock(&(pl->pLock));pthread_cond_signal(&(pl->tPcond));break;}
  	pt=pl->pTask_queue;
-       if(pt==NULL) //{ pthread_mutex_unlock(&(pl->pLock));continue;}
-     {printf("get the task error\n"); exit(0);}
+       if(pt==NULL) { pthread_mutex_unlock(&(pl->pLock));continue;}
+     // { printf("get the task error\n"); c;}
 		pl->pTask_queue=pt->next;
 		 pl->pTask_size--; 
                  pl->sum++;
-            //printf("tasksum :%d\n",pl->tasksum) ;
+               //printf("tasksum :%d\n",pl->tasksum) ;
                  
                   //pl->uWork_num++;
            //printf("sum of current :%d\n",pl->sum);
-             //printf("task size %d\n",pl->pTask_size);   
+             //printf("task size %d\n",pl->pTask_size); 
+        // printf("do it  \n");
                 pthread_mutex_unlock(&(pl->pLock));
-                pthread_t tid = pthread_self();
-		pi=get_thread_by_id(pl,tid);
-		 pi->status=isruning;
+                
+		 pi->status=isruning; 
+
+                
               (*(pt->f))(pt->arg);
               //if( close(*(int *)pt->arg)==-1)perror("close :");
                 pi->status=isnotruning;
@@ -888,7 +896,7 @@ void excute_func(void *arg)
 
 }
 //监测线程池获取当前正在处理任务的线程数目
-int  monitor_pthread(Pthread_pool * thread_pl)
+int  Tpool_monitor_pthread(Pthread_pool * thread_pl)
 {
  Pthread_pool *pl=thread_pl;
 //Pthread_info * pitemp;
@@ -898,8 +906,8 @@ int num_of_running_thread=0;
 {
 if(pi->status==isruning)  
 {
-num_of_running_thread++;}
-
+num_of_running_thread++;
+}
 pi=pi->next;
 }
 return num_of_running_thread;
