@@ -1,172 +1,11 @@
-﻿
-#include<sys/socket.h>//socket,connect,bind,listen accept
-#include<stdio.h>
-#include<netinet/in.h>//sockaddr_in
-#include<arpa/inet.h>//ttonl
-#include<stdlib.h>//bzero();
-#include<string.h>//index,bzero(),strcasecmp(),strstr
-#include<sys/stat.h>//struct stat,stat;
-#include<fcntl.h>//open,read,fcntl
-#include<pthread.h>
-#include<sys/wait.h>
-#include<signal.h>
-#include<sys/errno.h>
-#define maxb 1024
-#define minb 100
-#define isruning 1
-#define isnotruning 0
-#define max_num_of_thread  50
-#define min_of_thread 10
-#define max_num_of_task 900
-int sum=0;
-//int processnum=0;
-typedef struct thread_task
-{
-	void * arg;
-	void*(*f)(void *);
-	//Pthread_task * pre;
-	struct thread_task* next;
-}Pthread_task;
-typedef struct thread_info
-{
-	pthread_t tid;
-	int status;
-	struct thread_info* next;
-}Pthread_info;
-typedef struct thread_pool
-{       int status;
-	pthread_mutex_t pLock ; //¶ÓÁÐ»¥³âËø,ŒŽÉæŒ°µœ¶ÓÁÐÐÞžÄÊ±ÐèÒªŒÓËø
-	pthread_cond_t  tPcond;
-        unsigned int sum;
-	Pthread_task * pTask_queue;
-	unsigned int pTask_size;
-        unsigned int uMaxoftask;
-	Pthread_info * pThread_queue;
-	unsigned int uMax;
-	unsigned int uCurr_num;
-	//unsigned int uWaite_num;
-	//unsigned int uWork_num;
-	//pthread_t printf_p;
-unsigned int tasksum;
-	  pthread_t monitor_p;
 
-
-}Pthread_pool;
- void Tpool_excute_func(void *arg);
-void Tpool_monitor_delete_thread(Pthread_pool *thread_pl);
- //int Init(int &port,int &backlog);
-//int start(int port);
-void Simhttp_accept_quest(void *);
-void Simhttp_discard_header(int fd);
-int Simhttp_get_line(int sock,char *buf,int size);
-int Simhttp_parse_uri(char * method,char *uri,char *filename,char * cgiargs);
-void Simhttp_server_static(int fd,char *filename,int filesize);
-void Simhttp_send_header(int fd,char *filename,char* filesize);
-void Simhttp_server_cgi(int fd,char *filename,char * method,char * cgiargs);
-void Simhttp_method_unimplemented(int client);
-void Simhttp_flle_not_found(int clientfd);
-void Simhttp_bad_request(int clientfd);
-void Simhttp_execute_error(int clientfd);
-
-void Simhttp_get_filetype(char * filename,char *filetype);
-
-Pthread_pool * Tpool_craet_Pthread(int num);
-int  Tpool_add_Task_to_queue(Pthread_pool *thread_pl,void *(*f)(void *),void * arg);
-void Tpool_monitor_delete_thread(Pthread_pool *thread_pl);
-int Tpool_is_need_add_thread(Pthread_pool * thread_pl);
- Pthread_info  *Tpool_get_thread_by_id(Pthread_pool *thread_pl,pthread_t id);
-void Tpool_excute_func(void *arg);
-int  Tpool_monitor_pthread(Pthread_pool * thread_pl);
-
-int main(int argc ,char *argv[])
-{
-	int listenfd,connectfd,backlog;
-	int port;
-//printf("%d\n",MSG_DONTWAIT);
-if(argc>=2){
-port=atoi(argv[1]);
-}
-else {
-printf("init port error\n");
-return 0;
-}
-char buf[1024];
-
-backlog=5;  
- pthread_t newthreadID;
-    
-  // if(Init(port,backlog)==0)return ;
-	struct sockaddr_in cliaddr;
-	struct sockaddr_in serveraddr;
-	;// 加上错误处理
-if((listenfd=socket(AF_INET,SOCK_STREAM,0))<0)
-{
-perror("creat socket error");
-exit(-1);
-}
-	printf("Init ok.... port:%d \n",port);
-	bzero(&serveraddr,sizeof(serveraddr));
-	serveraddr.sin_family=AF_INET;
-	serveraddr.sin_addr.s_addr=htonl(INADDR_ANY);
-	serveraddr.sin_port=htons(port);
-	if(bind(listenfd,(struct sockaddr*)&serveraddr,sizeof(serveraddr))<0)
-        {
-     perror("bind error");
-     exit(-1);
-}
-	printf("web test\n");
-	if(listen(listenfd,backlog)<0)
-{
- perror("listen error ");
- exit(-1);
-}
-
-
-/*sigset_t signal_mask;
-   sigemptyset (&signal_mask);
-   sigaddset (&signal_mask, SIGPIPE);
-   int rc = pthread_sigmask (SIG_BLOCK, &signal_mask, NULL);
-   if (rc != 0)
-   {
-      printf("block sigpipe error\n");
-   } */
-    Pthread_pool *thread_pl=NULL;
-
-    thread_pl=Tpool_craet_Pthread(20); //
-printf("process id :%d\n",getpid());
- 
-    int *p=NULL;
-	socklen_t clilen=sizeof(cliaddr);
-	while(1)
-	{
-	 if((connectfd=accept(listenfd,&cliaddr,&clilen))!=-1)
-	 {
-		 sum++;//printf("has got a connect\n");
-             p=(int *)malloc(sizeof(int));
-              if(p==NULL)break;
-             *p=connectfd;
-         Tpool_add_Task_to_queue(thread_pl,Simhttp_accept_quest,(void*)p);
-      //if(pthread_create(&newthreadID,NULL,Simhttp_accept_quest,(void*)p)!=0)
-          //perror("pthread");
-	   //Simhttp_accept_quest((void *)p);
-                 //int n= recv(connectfd,buf,1024,0);
-              //if(n<0)perror("recv error:");
-                  // buf[n]='\0';
-                 //printf("message:%d %s\n", n,buf);
-            
-			// close(connectfd);
-	 }			
-	}
-	close (listenfd);
-	return 0;
-
-}
+#include"simplehttp.h"
 /*请求处理函数，先找出方法和是否是cgi 在获取文件信息，进入相应的处理函数 based on httpd*/
 void Simhttp_accept_quest(void *arg)
 
   { 
-signal(SIGPIPE,SIG_IGN);
-struct timeval timeout = {1,500}; 
+   signal(SIGPIPE,SIG_IGN);//处理客户关闭的状态，而不是结束进程
+   struct timeval timeout = {1,500}; 
    //int nNetTimeout=100;
 //设置发送超时 
     int *pfd=(int *)arg;
@@ -189,7 +28,7 @@ struct timeval timeout = {1,500};
       sscanf(buf,"%s %s %s",method,uri,version);//提取方法和资源地址 版本
 	  if(strcasecmp(method,"GET")&&strcasecmp(method,"POST"))
 	{//判断方
-printf("method error\n");
+       printf("method error\n");
         Simhttp_discard_header(fd);
          Simhttp_method_unimplemented(fd);
 	//目前只写了get post方法有时间在加上 
@@ -653,7 +492,7 @@ Pthread_pool * Tpool_craet_Pthread(int num)
 	}
 
 	
-        pthread_create(&(pl->monitor_p),NULL,Tpool_monitor_delete_thread,pl);
+        //pthread_create(&(pl->monitor_p),NULL,Tpool_monitor_delete_thread,pl);
         printf("create thread success\n");
 	return pl;
 }
@@ -677,19 +516,17 @@ int * pfd=(int *)arg;
 	Pthread_task* temptask; 
         
      // printf(" arg >>>%d\n",*(int *)(pt->arg));
-       /* if(pl->uMaxoftask<pl->pTask_size)
+       if(pl->uMaxoftask<pl->pTask_size)
           {
       printf("nedd add \n");
-        if( Tpool_is_need_add_thread( thread_pl)==0)
-       {  
+       
       printf(" arg >>>%d\n",*pfd);
       close(*pfd);
          free(pfd);
          free(pt);
         
-         return 0;
-         }
-          }*/
+       return 0;
+          }
 
         pthread_mutex_lock(&(pl->pLock));
 	if(pl->pTask_queue==NULL)
@@ -722,8 +559,8 @@ void Tpool_monitor_delete_thread(Pthread_pool *thread_pl)
         printf("current num of thread :%d num of doing :%d\n",pl->uCurr_num,curr_num_of_doing);
 		if(curr_num_of_doing==0)
 		{
-			sleep(5);
-		   if( Tpool_monitor_pthread(thread_pl)==0&&pl->uCurr_num>min_of_thread)
+			sleep(15);
+		   if( Tpool_monitor_pthread(thread_pl)==0&&pl->uCurr_num>min_of_thread&&pl->pTask_size==0)
 		   {
 			   lastNum=pl->uCurr_num-min_of_thread;
 			   pthread_mutex_lock(&pl->pLock);
